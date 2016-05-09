@@ -3,4 +3,4 @@ scratch
 .ipynb_checkpoints
 data
 output
-__init__.py
+*.pyc
