@@ -5,21 +5,39 @@ import gzip
 DEFAULT_RANDOM_SEED = 0
 
 class Dataset:
-    def __init__(self, train_data, train_labels, test_data, test_labels, parent_dataset=[]):
-        self.train_data = train_data
-        self.train_labels = train_labels
-        self.test_data = test_data
-        self.test_labels = test_labels
-        self.label_set = set(train_labels)
+    def __init__(self, **kwargs):
+        if 'train_data' in kwargs:
+            train_data = kwargs['train_data']
+            train_labels = kwargs['train_labels']
+            test_data = kwargs['test_data']
+            test_labels = kwargs['test_labels']
+
+            self.mask_test = np.concatenate([0*train_data, 0*test_data + 1]).astype('bool')
+            self.mask_train = (1 - self.mask_test).astype('bool')
+            self.data = np.concatenate([train_data, test_data])
+            self.labels = np.concatenate([train_labels, test_labels])
+        else:
+            self.mask_test = kwargs['mask_test'].astype('bool')
+            self.mask_train = kwargs['mask_train'].astype('bool')
+            self.data = kwargs['data']
+            self.labels = kwargs['labels']
+
+        self.label_set = set(self.labels)
         self.nclasses = len(self.label_set)
-        self.parent_dataset = parent_dataset
+
+        self.parent_dataset = []
+        if 'parent_dataset' in kwargs:
+            self.parent_dataset = kwargs['parent_dataset']
 
     def seed(self, seed=DEFAULT_RANDOM_SEED):
         np.random.seed(seed)
 
     def get_subset(self, count_train, count_test):
-        train_data, train_labels = self._select_subset(self.train_data, self.train_labels, count_train)
-        test_data, test_labels = self._select_subset(self.test_data, self.test_labels, count_test)
+        train_data, train_labels = self.get_data(test=False)
+        test_data, test_labels = self.get_data(test=True)
+
+        train_data, train_labels = self._select_subset(train_data, train_labels, count_train)
+        test_data, test_labels = self._select_subset(test_data, test_labels, count_test)
 
         subdataset = Dataset(train_data, train_labels, test_data, test_labels, parent_dataset=self.parent_dataset+[self.__class__])
         return subdataset
@@ -46,9 +64,9 @@ class Dataset:
 
     def get_data(self, count=None, test=False):
         if test:
-            data, labels = self.test_data, self.test_labels
+            data, labels = self.data * self.mask_test, self.labels * self.mask_test
         else:
-            data, labels = self.train_data, self.train_labels
+            data, labels = self.data * self.mask_train, self.labels * self.mask_train
 
         if count >= len(labels):
             count = None
