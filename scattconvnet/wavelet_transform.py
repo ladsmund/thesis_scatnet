@@ -13,7 +13,7 @@ DEFAULT_SCALE = 4
 DEFAULT_MAX_DEPTH = 2
 DEFAULT_NANGLES = 4
 
-DEFAULT_N_PROCESS = 4
+DEFAULT_N_PROCESS = None
 
 
 def conv(img, kernel):
@@ -99,10 +99,15 @@ def process_data(dataset, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_dept
 
     pool = Pool(processes=nprocess, initializer=init_worker_process, initargs=(kernel_layers, scale,))
 
-    t_total = time()
+
+    t0 = time()
 
     responses, coefficients = zip(*pool.map(worker, dataset.data))
-    print "Process %i images in %.0f ms" % (nimages, (time() - t_total) * 1000)
+
+
+    t = (time() - t0) * 1000
+
+    print "Process %i images in %.0f ms (%.0f ms / image)" % (nimages, t, t/nimages)
 
     return ScatResponse(data=coefficients,
                         responses=responses,
