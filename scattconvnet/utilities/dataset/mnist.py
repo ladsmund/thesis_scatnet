@@ -39,4 +39,8 @@ class MNIST(dataset.Dataset):
         train_data = np.reshape(train_data, (len(train_data),28,28))
         test_data = np.reshape(test_data, (len(test_data),28,28))
 
-        dataset.Dataset.__init__(self, train_data, train_labels, test_data, test_labels)
+        dataset.Dataset.__init__(self,
+                                 train_data=train_data,
+                                 train_labels=train_labels,
+                                 test_data=test_data,
+                                 test_labels=test_labels)

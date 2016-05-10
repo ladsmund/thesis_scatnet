@@ -12,13 +12,13 @@ class Dataset:
             test_data = kwargs['test_data']
             test_labels = kwargs['test_labels']
 
-            self.mask_test = np.concatenate([0*train_data, 0*test_data + 1]).astype('bool')
+            self.mask_test = np.concatenate([0*train_labels, 0*test_labels+ 1]).astype('bool')
             self.mask_train = (1 - self.mask_test).astype('bool')
             self.data = np.concatenate([train_data, test_data])
             self.labels = np.concatenate([train_labels, test_labels])
         else:
-            self.mask_test = kwargs['mask_test'].astype('bool')
-            self.mask_train = kwargs['mask_train'].astype('bool')
+            self.mask_test = kwargs['mask_test']
+            self.mask_train = kwargs['mask_train']
             self.data = kwargs['data']
             self.labels = kwargs['labels']
 
@@ -39,7 +39,11 @@ class Dataset:
         train_data, train_labels = self._select_subset(train_data, train_labels, count_train)
         test_data, test_labels = self._select_subset(test_data, test_labels, count_test)
 
-        subdataset = Dataset(train_data, train_labels, test_data, test_labels, parent_dataset=self.parent_dataset+[self.__class__])
+        subdataset = Dataset(train_data=train_data,
+                             train_labels=train_labels,
+                             test_data=test_data,
+                             test_labels=test_labels,
+                             parent_dataset=self.parent_dataset+[self.__class__])
         return subdataset
 
     def _select_subset(self, data, labels, count):
@@ -64,9 +68,9 @@ class Dataset:
 
     def get_data(self, count=None, test=False):
         if test:
-            data, labels = self.data * self.mask_test, self.labels * self.mask_test
+            data, labels = self.data[self.mask_test], self.labels[self.mask_test]
         else:
-            data, labels = self.data * self.mask_train, self.labels * self.mask_train
+            data, labels = self.data[self.mask_train], self.labels[self.mask_train]
 
         if count >= len(labels):
             count = None
@@ -85,3 +89,4 @@ def load_dataset(path):
     f = gzip.open(path, 'rb')
     return pickle.load(f)
     f.close()
+
