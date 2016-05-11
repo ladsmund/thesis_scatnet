@@ -1,18 +1,14 @@
-import sys
 from time import time
-
 import numpy as np
 import cv2
 from multiprocessing import Pool
 
 from wavelet import morlet, gauss_kernel
-from utilities.dataset.dataset import Dataset, load_dataset, save_dataset
-from utilities.dataset.scat_response import ScatResponse
+from utilities.dataset import Dataset
 
 DEFAULT_SCALE = 4
 DEFAULT_MAX_DEPTH = 2
 DEFAULT_NANGLES = 4
-
 DEFAULT_N_PROCESS = None
 
 
@@ -47,27 +43,23 @@ class ScatNet:
                 responses += ScatNet.wavelet_transform(response, kernel_layers[1:], max_depth - 1)
             kernel_layers = kernel_layers[:-1]
 
-        return responses
+        return np.array(responses)
 
     @staticmethod
     def scatt_coefficients(responses, J):
         blur_kernel = gauss_kernel(2 ** J)
         downsample_step = 2 ** (J - 1)
 
-        def scat_coeff(r):
-            sc = cv2.filter2D(r, -1, blur_kernel)
-            return sc[::downsample_step, ::downsample_step]
+        blur = map(lambda i: conv(i, blur_kernel), responses)
+        scatt_coeff = map(lambda i: i[::downsample_step, ::downsample_step], blur)
 
-        scattering_coefficients = [scat_coeff(r) for r in responses]
-        return np.concatenate(scattering_coefficients)
+        return np.array(scatt_coeff)
 
     @staticmethod
     def generate_kernels(n_angles, J):
         angles = np.linspace(0, np.pi, n_angles, endpoint=False)
         sigmas = 2 ** (np.arange(1, J) + 1)
-
         kernel_layers = list()
-
         for sigma in sigmas:
             kernels = list()
             for angle in angles:
@@ -92,42 +84,34 @@ def worker(img):
     return (responses, coefficient)
 
 
-def process_data(dataset, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=DEFAULT_MAX_DEPTH,
+def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=DEFAULT_MAX_DEPTH,
                  nprocess=DEFAULT_N_PROCESS):
-    nimages = len(dataset.data)
+    nimages = data.shape[0]
     kernel_layers = ScatNet.generate_kernels(nangles, scale)
 
     pool = Pool(processes=nprocess, initializer=init_worker_process, initargs=(kernel_layers, scale,))
 
-
     t0 = time()
 
-    responses, coefficients = zip(*pool.map(worker, dataset.data))
+    scatt_res = pool.map(worker, data)
+    responses, coefficients = zip(*scatt_res)
+    responses = np.array(responses)
+    coefficients = np.array(coefficients)
 
-
+    print "type(responses): " + str(type(responses))
     t = (time() - t0) * 1000
+    print "Process %i images in %.0f ms (%.0f ms / image)" % (nimages, t, t / nimages)
 
-    print "Process %i images in %.0f ms (%.0f ms / image)" % (nimages, t, t/nimages)
-
-    return ScatResponse(data=coefficients,
-                        responses=responses,
-                        labels=dataset.labels,
-                        mask_test=dataset.mask_test,
-                        mask_train=dataset.mask_train,
-                        config={'nangles': nangles, 'max_depth': max_depth, 'scale': scale},
-                        parent_dataset=dataset.parent_dataset + [dataset.__class__])
+    return responses, coefficients
 
 
 if __name__ == '__main__':
     import argparse
-    from time import time
-    import os
-
-    t_total = time()
 
     parser = argparse.ArgumentParser("Scattering Wavelet Transformation")
     parser.add_argument('inputs', type=str, nargs='+')
     parser.add_argument('-d', '--dataset_input', action='store_true', default=False)
+    parser.add_argument('-k', '--asset_key', type=str)
     parser.add_argument('-J', '--scale', type=int, default=DEFAULT_SCALE)
     parser.add_argument('-a', '--nangles', type=int, default=DEFAULT_NANGLES)
     parser.add_argument('-m', '--maxdepth', type=int, default=DEFAULT_MAX_DEPTH)
@@ -135,40 +119,27 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str)
     args = parser.parse_args()
 
-    print args
+    dataset = Dataset(args.inputs[0])
+    data = dataset.get_asset_data(args.asset_key)
 
-    if args.dataset_input:
-        dataset = load_dataset(args.inputs[0])
+    parameters = {"nangles": args.nangles,
+                  "max_depth": args.maxdepth,
+                  "scale": args.scale}
 
-        if not os.path.exists(os.path.dirname(args.output)):
-            sys.stderr.write("No such directory: %s\n" % os.path.dirname(args.output))
-            exit(1)
+    responses, coefficients = process_data(data=data,
+                                           scale=args.scale,
+                                           nangles=args.nangles,
+                                           max_depth=args.maxdepth,
+                                           nprocess=args.nprocesses)
 
-        res = process_data(dataset=dataset,
-                           scale=args.scale,
-                           nangles=args.nangles,
-                           max_depth=args.maxdepth,
-                           nprocess=args.nprocesses)
+    generator_name = "scattnet"
+    parameter_string = "a%02i_s%02i_m%02i" % (args.nangles, args.scale, args.maxdepth)
+    responses_key = "%s_%s_resp" % (generator_name, parameter_string)
+    coefficients_key = "%s_%s_coef" % (generator_name, parameter_string)
 
-        save_dataset(res, args.output);
-        pass
+    dataset.add_asset(responses, responses_key, generator=generator_name, parameters=parameters,
+                      parent_asset=args.asset_key)
+    dataset.add_asset(coefficients, coefficients_key, generator=generator_name, parameters=parameters,
+                      parent_asset=args.asset_key)
 
-
-    else:
-        kernel_layers = ScatNet.generate_kernels(args.nangles, args.scale)
-
-        for img_path in args.inputs:
-            t = time()
-
-            img_name = os.path.basename(img_path)
-            feature_name = "%s" % (img_name.split('.')[0])
-
-            img = cv2.imread(img_path)[:, :, 0]
-            img = img.astype('float64')
-            responses = ScatNet.wavelet_transform(img, kernel_layers)
-            scattering_coefficients = ScatNet.scatt_coefficients(responses, args.scale)
-            cv2.imwrite(os.path.join(args.output, img_name), scattering_coefficients)
-            np.save(os.path.join(args.output, feature_name), scattering_coefficients)
-            print "%s in %.0f ms" % (img_name, (time() - t) * 1000)
-
-        print "Process %i images in %.0f ms" % (len(args.images), (time() - t_total) * 1000)
+    dataset.save()
