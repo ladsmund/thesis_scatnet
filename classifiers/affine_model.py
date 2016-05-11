@@ -29,8 +29,8 @@ class AffineModel:
 
     def classify(self, data):
         # distances = [self.bruna_mallat_dist(m, data) for m in self.models]
-        # distances = [self.model_dist(m, data) for m in self.models]
-        distances = [self.mahalanobis_dist(m, data) for m in self.models]
+        distances = [self.model_dist(m, data) for m in self.models]
+        # distances = [self.mahalanobis_dist(m, data) for m in self.models]
 
         return np.argmin(distances)
 
