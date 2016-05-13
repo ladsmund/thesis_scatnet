@@ -3,6 +3,8 @@ import numpy as np
 import cv2
 from multiprocessing import Pool
 
+import sys
+
 from wavelet import morlet, gauss_kernel
 from utilities.dataset import Dataset
 
@@ -19,31 +21,39 @@ def conv(img, kernel):
 
 
 class ScatNet:
-    def __init__(self, nangles, scale, max_depth=DEFAULT_MAX_DEPTH):
+    def __init__(self, nangles, scale, max_order=DEFAULT_MAX_DEPTH):
         self.nangles = nangles
+        self.angles = np.linspace(0, np.pi, nangles, endpoint=False)
         self.scale = scale
-        self.max_depth = max_depth
-        self.kernel_layers = self.generate_kernels(nangles, scale)
+        self.scales = 2 ** np.arange(1, scale + 1)
+        self.max_order = max_order
+        self.kernel_layers = self.generate_kernels(self.angles, self.scales)
+        self.configs = self.scatter_config(range(self.nangles), range(self.scale), self.max_order)
+        self.config_indices = dict(zip(self.configs, range(len(self.configs))))
 
     def transform(self, img):
-        responses = self.wavelet_transform(img, self.kernel_layers, self.max_depth)
-        return self.scatt_coefficients(responses, self.scale)
+        responses = self.wavelet_transform(img)
+        return responses, self.scatt_coefficients(responses, self.scale)
 
-    @staticmethod
-    def wavelet_transform(src, kernel_layers, max_depth=DEFAULT_MAX_DEPTH):
-        responses = [src]
+    def wavelet_transform(self, src_org):
+        res = np.zeros((len(self.configs),) + src_org.shape, dtype='float32')
 
-        if len(kernel_layers) == 0 or max_depth == 0:
-            return responses
+        for c in self.configs:
+            conv_config = c[:-1]
+            index = self.config_indices[c]
 
-        while len(kernel_layers) > 0:
-            kernels = kernel_layers[0]
-            for kernel in kernels:
-                response = conv(src, kernel)
-                responses += ScatNet.wavelet_transform(response, kernel_layers[1:], max_depth - 1)
-            kernel_layers = kernel_layers[:-1]
+            if len(conv_config) is 0:
+                res[index, :, :] = src_org
+                continue
 
-        return np.array(responses)
+            angle_indx, scale_indx = c[-1]
+            kernel = self.kernel_layers[angle_indx][scale_indx]
+
+            src_indx = self.config_indices[c[:-1]]
+            src = res[src_indx]
+            res[index, :, :] = conv(src, kernel)
+
+        return res
 
     @staticmethod
     def scatt_coefficients(responses, J):
@@ -56,11 +66,9 @@ class ScatNet:
         return np.array(scatt_coeff)
 
     @staticmethod
-    def generate_kernels(n_angles, J):
-        angles = np.linspace(0, np.pi, n_angles, endpoint=False)
-        sigmas = 2 ** (np.arange(1, J) + 1)
+    def generate_kernels(angles, scales):
         kernel_layers = list()
-        for sigma in sigmas:
+        for sigma in scales:
             kernels = list()
             for angle in angles:
                 kernels.append(morlet(sigma, angle))
@@ -68,39 +76,50 @@ class ScatNet:
 
         return kernel_layers
 
+    @staticmethod
+    def scatter_config(angles, scales, max_order, config=[(None,)]):
+        if max_order <= 0:
+            return config
 
-def init_worker_process(kernel_layers_arg, scale_arg):
-    global scale
-    scale = scale_arg
-    global kernel_layers
-    kernel_layers = kernel_layers_arg
+        config_layer = []
+        for si, s in enumerate(scales):
+            config_new = []
+            for a in angles:
+                config_new += [c + ((s, a),) for c in config]
+            config_layer += ScatNet.scatter_config(angles, scales[si + 1:], max_order - 1, config_new)
+
+        return config + config_layer
 
 
-def worker(img):
-    global scale
-    global kernel_layers
-    responses = ScatNet.wavelet_transform(img, kernel_layers)
-    coefficient = ScatNet.scatt_coefficients(responses, scale)
-    return (responses, coefficient)
+def proc_instantiater(scatnet):
+    global proc_scatnet
+    proc_scatnet= scatnet
+
+def proc_worker(img):
+    global proc_scatnet
+    return proc_scatnet.transform(img)
 
 
 def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=DEFAULT_MAX_DEPTH,
-                 nprocess=DEFAULT_N_PROCESS):
+                 multi_process=True):
     nimages = data.shape[0]
-    kernel_layers = ScatNet.generate_kernels(nangles, scale)
-
-    pool = Pool(processes=nprocess, initializer=init_worker_process, initargs=(kernel_layers, scale,))
 
     t0 = time()
 
-    scatt_res = pool.map(worker, data)
+    scatnet = ScatNet(nangles=nangles, scale=scale, max_order=max_depth)
+
+    if multi_process:
+        pool = Pool(initializer=proc_instantiater, initargs=(scatnet,))
+        scatt_res = pool.map(proc_worker, data)
+    else:
+        scatt_res = map(scatnet.transform, data)
+
     responses, coefficients = zip(*scatt_res)
     responses = np.array(responses)
     coefficients = np.array(coefficients)
 
-    print "type(responses): " + str(type(responses))
     t = (time() - t0) * 1000
-    print "Process %i images in %.0f ms (%.0f ms / image)" % (nimages, t, t / nimages)
+    print "Processed %i images in %.0f ms (%.0f ms / image)" % (nimages, t, t / nimages)
 
     return responses, coefficients
 
@@ -110,12 +129,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Scattering Wavelet Transformation")
     parser.add_argument('inputs', type=str, nargs='+')
-    parser.add_argument('-d', '--dataset_input', action='store_true', default=False)
+    parser.add_argument('-i', '--image_input', action='store_true', default=False)
     parser.add_argument('-k', '--asset_key', type=str)
     parser.add_argument('-J', '--scale', type=int, default=DEFAULT_SCALE)
     parser.add_argument('-a', '--nangles', type=int, default=DEFAULT_NANGLES)
     parser.add_argument('-m', '--maxdepth', type=int, default=DEFAULT_MAX_DEPTH)
-    parser.add_argument('-p', '--nprocesses', type=int, default=DEFAULT_N_PROCESS)
+    parser.add_argument('-p', '--multi_process', action='store_false', default=True)
     parser.add_argument('-o', '--output', type=str)
     args = parser.parse_args()
 
@@ -130,7 +149,7 @@ if __name__ == '__main__':
                                            scale=args.scale,
                                            nangles=args.nangles,
                                            max_depth=args.maxdepth,
-                                           nprocess=args.nprocesses)
+                                           multi_process=args.multi_process)
 
     generator_name = "scattnet"
     parameter_string = "a%02i_s%02i_m%02i" % (args.nangles, args.scale, args.maxdepth)
