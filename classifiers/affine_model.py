@@ -24,7 +24,7 @@ class AffineModel:
         t = time()
         res = map(self.classify, data)
         dt = time()-t
-        print "Prediction took\n\t%.3f s\n\t%.3f ms per point" % (dt, 1000*dt / len(data))
+        # print "Prediction took\n\t%.3f s\n\t%.3f ms per point" % (dt, 1000*dt / len(data))
         return res
 
     def classify(self, data):

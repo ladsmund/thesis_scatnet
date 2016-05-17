@@ -7,7 +7,7 @@ import sys
 
 from wavelet import morlet, gauss_kernel
 from utilities.dataset import Dataset
-from utilities import scatnet_utilities
+# from utilities import scatnet_utilities
 
 DEFAULT_SCALE = 4
 DEFAULT_MAX_DEPTH = 2
