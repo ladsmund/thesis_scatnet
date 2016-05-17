@@ -7,7 +7,7 @@ import sys
 
 from wavelet import morlet, gauss_kernel
 from utilities.dataset import Dataset
-from utilities import scatnet_utilities
+# from utilities import scatnet_utilities
 
 DEFAULT_SCALE = 4
 DEFAULT_MAX_DEPTH = 2
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     dataset.add_asset(coefficients, coefficients_key, generator=generator_name, parameters=parameters,
                       parent_asset=args.asset_key)
 
-    from utilities.scatnet_utilities import write_to_file
+    # from utilities.scatnet_utilities import write_to_file
 
     # write_filter_set(scatnet, args.inputs[0])
 
