@@ -31,18 +31,20 @@ def morlet(sigma, angle, size=None, angle_freq=DEFAULT_XI):
     carrier = wave2d(xs, ys, sigma, angle, angle_freq)
     envelope = gauss(radius(xs, ys), sigma)
 
+    # Normalize envolope such that it sums to 1.
+    envelope /= np.sum(envelope)
+
     # Adjust to the zero mean wavelet constrain
-    # wavelet = np.multiply(carrier, envelope)
     wavelet = carrier * envelope
     sum0 = np.sum(wavelet)
     sum_envelope = np.sum(envelope)
-    c0 = sum0 / sum_envelope
-    wavelet = np.multiply(carrier - c0, envelope)
+    beta = sum0 / sum_envelope
+    wavelet = np.multiply(carrier - beta, envelope)
 
     # Adjust such that the squared norm equals 1
-    square_norm = np.sum(np.power(np.abs(wavelet), 2))
-    c1 = 1. / np.sqrt(square_norm)
-    wavelet = c1 * wavelet
+    # square_norm = np.sum(np.power(np.abs(wavelet), 2))
+    # alpha = 1. / np.sqrt(square_norm)
+    # wavelet = alpha * wavelet
 
     return wavelet
 
