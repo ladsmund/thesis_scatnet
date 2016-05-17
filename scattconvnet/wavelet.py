@@ -1,12 +1,14 @@
 import numpy as np
 
 DEFAULT_SIZE = 4
+DEFAULT_XI = 1  # Scale frequency
 
 radius = lambda x, y: np.sqrt(x ** 2 + y ** 2)
 gauss = lambda r, s: np.exp(-r ** 2 / (2. + s ** 2))
 project = lambda x, y, a: np.cos(a) * x + np.sin(a) * y
-wave1d = lambda r, s: np.exp(2j * np.pi * r / s)
-wave2d = lambda x, y, s, a: wave1d(project(x, y, a), s)
+wave1d = lambda r, s, xi=np.pi: np.exp(-1j * xi * r / s)
+wave2d = lambda x, y, s, a, xi=np.pi: wave1d(project(x, y, a), s, xi)
+
 
 def mesh(size):
     n = size // 2
@@ -20,12 +22,13 @@ def gauss_kernel(sigma, size=None):
     kernel = gauss(radius(xs, ys), sigma)
     return kernel / kernel.sum()
 
-def morlet(sigma, angle, size=None):
+
+def morlet(sigma, angle, size=None, angle_freq=DEFAULT_XI):
     if size is None:
-        size = int(DEFAULT_SIZE*sigma)
+        size = int(DEFAULT_SIZE * sigma)
 
     xs, ys = mesh(size)
-    carrier = wave2d(xs, ys, sigma, angle)
+    carrier = wave2d(xs, ys, sigma, angle, angle_freq)
     envelope = gauss(radius(xs, ys), sigma)
 
     # Adjust to the zero mean wavelet constrain
