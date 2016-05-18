@@ -17,6 +17,8 @@ DEFAULT_MAX_DEPTH = 2
 DEFAULT_NANGLES = 4
 DEFAULT_N_PROCESS = None
 
+DEFAULT_CALLBACK_INTERVAL = .5
+
 
 def conv(img, kernel):
     if kernel.dtype == 'complex':
@@ -122,8 +124,17 @@ def proc_worker(img):
     return res
 
 
+def print_status(proc_count, proc_size, start_time):
+    if proc_count > 0:
+        avg_speed = 1000 * (time() - start_time) / proc_count
+    else:
+        avg_speed = 0
+    s = "%6i/%i - %5.1fms/img\n" % (proc_count, proc_size, avg_speed)
+    sys.stdout.write(s)
+
+
 def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=DEFAULT_MAX_DEPTH,
-                 multi_process=True):
+                 multi_process=True, status_callback=print_status, callback_interval=DEFAULT_CALLBACK_INTERVAL):
     nimages = data.shape[0]
 
     t0 = time()
@@ -131,26 +142,22 @@ def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=D
     scatnet = ScatNet(nangles=nangles, scale=scale, max_order=max_depth)
 
     if multi_process:
-        data_len = len(data)
         status_counter = multiprocessing.Value('i', 0)
         pool = Pool(initializer=proc_instantiater, initargs=(scatnet, status_counter))
         defer = pool.map_async(proc_worker, data)
-        t = time()
 
         while True:
             status = status_counter.value
-            if status > 0:
-                avg_speed = 1000 * (time() - t) / status
-            else:
-                avg_speed = 0
-            s = "%6i/%i - %5.1fms/img\n" % (status, data_len, avg_speed)
-            sys.stdout.write(s)
-            if status >= data_len:
+            status_callback(status, nimages, t0)
+            if status >= nimages:
                 break
-            sleep(.5)
+            sleep(callback_interval)
         scatt_res = defer.get()
+        pool.close()
     else:
+        status_callback(0, nimages, t0)
         scatt_res = map(scatnet.transform, data)
+        status_callback(nimages, nimages, t0)
 
     responses, coefficients = zip(*scatt_res)
     responses = np.array(responses)
