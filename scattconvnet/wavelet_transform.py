@@ -1,6 +1,5 @@
 from time import time, sleep
 import numpy as np
-import cv2
 import multiprocessing
 from multiprocessing import Pool
 
@@ -9,103 +8,10 @@ import os
 import signal
 import tempfile
 
-from wavelet import morlet, gauss_kernel
+from scatnet import ScatNet, DEFAULT_SCALE, DEFAULT_NANGLES, DEFAULT_MAX_DEPTH
 from utilities.dataset import Dataset
 
-DEFAULT_SCALE = 4
-DEFAULT_MAX_DEPTH = 2
-DEFAULT_NANGLES = 4
-DEFAULT_N_PROCESS = None
-
 DEFAULT_CALLBACK_INTERVAL = .5
-
-
-def conv(img, kernel):
-    if kernel.dtype == 'complex':
-        r = cv2.filter2D(img, -1, np.real(kernel))
-        i = cv2.filter2D(img, -1, np.imag(kernel))
-        return r + i * 1j
-    else:
-        return cv2.filter2D(img, -1, kernel)
-
-
-class ScatNet:
-    def __init__(self, nangles, scale, max_order=DEFAULT_MAX_DEPTH):
-        self.nangles = nangles
-        self.angles = np.linspace(3 * np.pi / 2, np.pi / 2, nangles, endpoint=False)
-        self.scale = scale
-        self.scales = 2 ** np.arange(0, scale)
-        self.max_order = max_order
-        self.kernel_layers = self.generate_kernels(self.angles, self.scales)
-        self.configs = self.scatter_config(range(self.nangles), range(self.scale), self.max_order)
-        self.out_dim = len(self.configs)
-
-        def get_key(c):
-            l = len(c)
-            if l == 0:
-                return l
-            else:
-                a, s = zip(*c)
-                return l, s, a
-
-        self.configs.sort(key=get_key)
-
-        self.config_indices = dict(zip(self.configs, range(self.out_dim)))
-        self.blur_kernel = gauss_kernel(self.scales[-1])
-        self.downsample_step = 2 ** (self.scale - 1)
-
-    def transform(self, img):
-        responses = self.wavelet_transform(img)
-        return responses, self.scatt_coefficients(responses)
-
-    def wavelet_transform(self, src_org):
-        res = np.zeros((len(self.configs),) + src_org.shape, dtype='float64')
-
-        for c in self.configs:
-            index = self.config_indices[c]
-
-            if len(c) is 0:
-                res[index, :, :] = src_org
-                continue
-
-            scale_indx, angle_indx = c[-1]
-            kernel = self.kernel_layers[angle_indx][scale_indx]
-            src_indx = self.config_indices[c[:-1]]
-            src = res[src_indx]
-
-            res[index, :, :] = np.abs(conv(src, kernel))
-
-        return res
-
-    def scatt_coefficients(self, responses):
-        blur = map(lambda i: conv(i, self.blur_kernel), responses)
-        scatt_coeff = map(lambda i: i[::self.downsample_step, ::self.downsample_step], blur)
-        return np.array(scatt_coeff)
-
-    @staticmethod
-    def generate_kernels(angles, scales):
-        kernel_layers = list()
-        for sigma in scales:
-            kernels = list()
-            for angle in angles:
-                kernels.append(morlet(sigma, angle))
-            kernel_layers.append(kernels)
-
-        return kernel_layers
-
-    @staticmethod
-    def scatter_config(angles, scales, max_order, config=[()]):
-        if max_order <= 0:
-            return config
-
-        config_layer = []
-        for si, s in enumerate(scales):
-            config_new = []
-            for a in angles:
-                config_new += [c + ((a, s),) for c in config]
-            config_layer += ScatNet.scatter_config(angles, scales[si + 1:], max_order - 1, config_new)
-
-        return config + config_layer
 
 
 def proc_instantiater(scatnet, status_counter_arg, data_arg, responses_array, coefficients_array):
@@ -152,24 +58,23 @@ def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=D
     print "Instantiate scatnet"
     scatnet = ScatNet(nangles=nangles, scale=scale, max_order=max_depth)
 
-
     print "Instantiate output arrays"
     if responses_file is None:
         responses_file = tempfile.NamedTemporaryFile(mode='w+')
     elif isinstance(responses_file, str):
         responses_file = open(responses_file, 'w+')
     responses = np.memmap(responses_file, mode='w+',
-                          shape=(data.shape[0], scatnet.out_dim, data.shape[1], data.shape[2]),
-                          dtype='float64'
+                          shape=(data.shape[0], scatnet.feature_dimension, data.shape[1], data.shape[2]),
+                          dtype='float32'
                           )
     if coefficients_file is None:
         coefficients_file = tempfile.NamedTemporaryFile(mode='w+')
     elif isinstance(coefficients_file, str):
         coefficients_file = open(coefficients_file, 'w+')
     coefficients = np.memmap(coefficients_file, mode='w+',
-                             shape=(data.shape[0], scatnet.out_dim, data.shape[1] // scatnet.downsample_step,
+                             shape=(data.shape[0], scatnet.feature_dimension, data.shape[1] // scatnet.downsample_step,
                                     data.shape[2] // scatnet.downsample_step),
-                             dtype='float64'
+                             dtype='float32'
                              )
 
     if multi_process:
