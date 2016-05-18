@@ -1,13 +1,16 @@
-from time import time
+from time import time, sleep
 import numpy as np
 import cv2
+import multiprocessing
 from multiprocessing import Pool
 
 import sys
+import signal
 
 from wavelet import morlet, gauss_kernel
 from utilities.dataset import Dataset
-# from utilities import scatnet_utilities
+
+# TODO: Flush data to disk while processing
 
 DEFAULT_SCALE = 4
 DEFAULT_MAX_DEPTH = 2
@@ -103,14 +106,20 @@ class ScatNet:
         return config + config_layer
 
 
-def proc_instantiater(scatnet):
+def proc_instantiater(scatnet, status_counter_arg):
     global proc_scatnet
     proc_scatnet = scatnet
+    global status_counter
+    status_counter = status_counter_arg
 
 
 def proc_worker(img):
     global proc_scatnet
-    return proc_scatnet.transform(img)
+    global status_counter
+    res = proc_scatnet.transform(img)
+    with status_counter.get_lock():
+        status_counter.value += 1
+    return res
 
 
 def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=DEFAULT_MAX_DEPTH,
@@ -122,8 +131,24 @@ def process_data(data, scale=DEFAULT_SCALE, nangles=DEFAULT_NANGLES, max_depth=D
     scatnet = ScatNet(nangles=nangles, scale=scale, max_order=max_depth)
 
     if multi_process:
-        pool = Pool(initializer=proc_instantiater, initargs=(scatnet,))
-        scatt_res = pool.map(proc_worker, data)
+        data_len = len(data)
+        status_counter = multiprocessing.Value('i', 0)
+        pool = Pool(initializer=proc_instantiater, initargs=(scatnet, status_counter))
+        defer = pool.map_async(proc_worker, data)
+        t = time()
+
+        while True:
+            status = status_counter.value
+            if status > 0:
+                avg_speed = 1000 * (time() - t) / status
+            else:
+                avg_speed = 0
+            s = "%6i/%i - %5.1fms/img\n" % (status, data_len, avg_speed)
+            sys.stdout.write(s)
+            if status >= data_len:
+                break
+            sleep(.5)
+        scatt_res = defer.get()
     else:
         scatt_res = map(scatnet.transform, data)
 
@@ -158,6 +183,8 @@ if __name__ == '__main__':
                   "max_depth": args.maxdepth,
                   "scale": args.scale}
 
+    signal.signal(signal.SIGINT, lambda signum, _: exit(signum))
+
     responses, coefficients, scatnet = process_data(data=data,
                                                     scale=args.scale,
                                                     nangles=args.nangles,
@@ -173,11 +200,5 @@ if __name__ == '__main__':
                       parent_asset=args.asset_key)
     dataset.add_asset(coefficients, coefficients_key, generator=generator_name, parameters=parameters,
                       parent_asset=args.asset_key)
-
-    # from utilities.scatnet_utilities import write_to_file
-
-    # write_filter_set(scatnet, args.inputs[0])
-
-    # print s
 
     dataset.save()
