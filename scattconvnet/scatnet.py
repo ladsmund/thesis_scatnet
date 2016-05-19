@@ -53,13 +53,17 @@ def get_scatter_config(angles, scales, max_order):
 
 
 class ScatNet:
-    def __init__(self, nangles, scale, max_order=DEFAULT_MAX_DEPTH):
+    response_dtype = 'float32'
+    coefficient_dtype = 'float32'
+
+    def __init__(self, nangles, scale, max_order=DEFAULT_MAX_DEPTH, return_response=False):
         self.nangles = nangles
         self.angles = np.linspace(3 * np.pi / 2, np.pi / 2, nangles, endpoint=False)
         self.scale = scale
         self.scales = 2 ** np.arange(0, scale)
         self.max_order = max_order
         self.kernel_layers = generate_kernels(self.angles, self.scales)
+        self.return_response = return_response
 
         self.configs, self.config_indices = get_scatter_config(range(self.nangles), range(self.scale), self.max_order)
         self.feature_dimension = len(self.configs)
@@ -69,7 +73,10 @@ class ScatNet:
 
     def transform(self, img):
         responses = self.wavelet_transform(img)
-        return responses, self.scatt_coefficients(responses)
+        if self.return_response:
+            return responses, self.scatt_coefficients(responses)
+        else:
+            return self.scatt_coefficients(responses)
 
     def wavelet_transform(self, src_org):
         res = np.zeros((len(self.configs),) + src_org.shape, dtype='float32')
@@ -99,10 +106,15 @@ class ScatNet:
         scatt_coeff = map(lambda i: i[::self.downsample_step, ::self.downsample_step], blur)
         return np.array(scatt_coeff)
 
-    def get_coefficient_shape(self, input_shape):
-        downsample_shape = (map(lambda x: x//self.downsample_step, input_shape))
-        return self.get_response_shape(downsample_shape)
+    def coefficient_shape(self, input_shape, number=None):
+        downsample_shape = (map(lambda x: x // self.downsample_step, input_shape))
+        return self.response_shape(downsample_shape, number)
 
-    def get_response_shape(self, input_shape):
-        return (self.feature_dimension,) + tuple(input_shape)
+    def response_shape(self, input_shape, number=None):
+        if number is None:
+            return (self.feature_dimension,) + tuple(input_shape)
+        else:
+            return (number, self.feature_dimension,) + tuple(input_shape)
 
+    def get_config_string(self):
+        return "a%02i_s%02i_m%02i" % (self.nangles, self.scale, self.max_order)

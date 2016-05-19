@@ -54,9 +54,22 @@ class Dataset:
         dtype = self.assets[key]['dtype']
         return array_init_fun(path, shape, dtype)
 
+    def new_asset(self, key, shape, dtype, generator, parameters=None, version=None, parent_asset=None):
+        asset = dict()
+        asset['generator'] = generator
+        asset['version'] = version
+        asset['parameters'] = parameters
+        asset['parent_asset'] = parent_asset
+        asset['shape'] = list(shape)
+        asset['dtype'] = str(dtype)
+        self.assets[key] = asset
+
+        filename = self.asset_file_path(key)
+        return np.memmap(filename, mode='w+', shape=shape, dtype=dtype)
+
     def add_asset(self, array, key, generator, version=None, parameters=None, parent_asset=None):
         # Write array to data file
-        filename = os.path.join(self.path, key + ".data")
+        filename = os.path.join(self.path, key + self.ASSET_EXT)
 
         if isinstance(array, np.memmap) and array.filename == filename:
             # print "The memory map file was already written to the asset file"

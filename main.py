@@ -5,7 +5,7 @@ import scipy.signal
 from time import time
 
 import cv2
-from scattconvnet.wavelet_transform import generate_kernels, wavelet_transform, scatt_coefficients
+from scattconvnet.main import generate_kernels, wavelet_transform, scatt_coefficients
 
 img = scipy.misc.ascent()
 

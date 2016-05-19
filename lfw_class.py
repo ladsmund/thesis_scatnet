@@ -1,5 +1,5 @@
 
-from scattconvnet.wavelet_transform import ScatNet
+from scattconvnet.main import ScatNet
 from classifiers.affine_model import AffineModel
 from sklearn.datasets import fetch_lfw_people
 
