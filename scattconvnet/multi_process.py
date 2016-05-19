@@ -1,28 +1,31 @@
+from scatnet import ScatNet
 import multiprocessing
 
+DEFAULT_QUEUE_SIZE = 128
 
-def q_init(scatnet_arg, queue_arg):
+
+def q_init(scatnet_arg):
     global scatnet
-    global queue
     scatnet = scatnet_arg
-    queue = queue_arg
 
 
 def q_work((index, img)):
     global scatnet
-    global queue
-    queue.put((index, scatnet.transform(img),))
+    scatnet.queue.put((index, scatnet.process(img),))
 
 
-def process(scatnet, inputs):
-    nimages = inputs.shape[0]
+class MultiScatNet(ScatNet):
+    def __init__(self, *args, **kwargs):
+        self.queue_size = kwargs.pop('queue_size', DEFAULT_QUEUE_SIZE)
+        self.queue = None
+        ScatNet.__init__(self, *args, **kwargs)
 
-    output_queue = multiprocessing.Queue(128)
-    pool = multiprocessing.Pool(initializer=q_init, initargs=(scatnet, output_queue))
-    pool.map_async(q_work, enumerate(inputs), chunksize=1)
-
-    progress = 0
-    while progress < nimages:
-        i, res = output_queue.get()
-        progress += 1
-        yield i, res
+    def _process_iterator(self, inputs):
+        self.queue = multiprocessing.Queue(self.queue_size)
+        pool = multiprocessing.Pool(initializer=q_init, initargs=(self,))
+        pool.map_async(q_work, enumerate(inputs), chunksize=1)
+        for _ in range(inputs.shape[0]):
+            i, res = self.queue.get()
+            yield i, res
+        pool.close()
+        self.queue.close()
