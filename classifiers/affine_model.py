@@ -14,14 +14,8 @@ class AffineModel():
     '''Classification algorithm described in BrunaMallat 2011'''
 
     def __init__(self, **kwargs):
-        self.n_components = None
-        self.models = []
-        self.set_params(**kwargs)
-
-    def set_params(self, **kwargs):
-        self.model = []
         self.n_components = kwargs.pop('n_components', None)
-        return self
+        self.models = []
 
     def get_params(self, deep=True):
         return {'n_components': self.n_components}

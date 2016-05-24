@@ -8,6 +8,7 @@ DEFAULT_CALLBACK_INTERVAL = .5
 
 
 def process_data(input=None,
+                 key = None,
                  dataset=None,
                  input_asset_key=None,
                  scale=DEFAULT_SCALE,
@@ -30,7 +31,8 @@ def process_data(input=None,
     #######################################################
     # Instantiate output arrays
     #######################################################
-    key = "%s_%s" % (scatnet.get_key(), input_asset_key)
+    if key is None:
+        key = "%s_%s" % (scatnet.get_key(), input_asset_key)
     shape = scatnet.get_shape(input_shape, nimages)
     output = dataset.new_asset(key=key, dtype=scatnet.coefficient_dtype, shape=shape, generator='scatnet',
                                parent_asset=input_asset_key,

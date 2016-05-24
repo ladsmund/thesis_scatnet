@@ -19,11 +19,17 @@ redo_find_dim = False
 labels_key = 'labels'
 labels = dataset.get_asset_data(labels_key)
 
+parameters = {"nangles":6, "scale":3, "max_depth":3}
+
+data_key = "scatnet_" + "_".join(["%s%i" %(i) for i in parameters.items()])
+affine_model_key = 'affine_model_' + data_key
+print "data_key:         %s" % data_key
+print "affine_model_key: %s" % affine_model_key
+
 print("****************************")
 print("Process ScatNet Coefficients")
-data_key = 'scatnet_a06_s03_m02_coef_original'
 if redo_scatnet or not data_key in dataset.assets:
-    data = scattconvnet.process_data(dataset=dataset, input_asset_key='original', nangles=6, scale=3, max_depth=2)
+    data = scattconvnet.process_data(key=data_key, dataset=dataset, input_asset_key='original', **parameters)
     dataset.save()
 else:
     data = dataset.get_asset_data(data_key)
@@ -39,9 +45,8 @@ labels_test = labels[600::1]
 print("************************************")
 print("Generate affine model for all labels")
 max_dim = 40
-affine_model_key = 'affine_model' + data_key
 if redo_affine_model or not affine_model_key in dataset.assets:
-    affine_model = AffineModel(n_components=max_dim)
+    affine_model = AffineModel(n_components=max_dim, verbose=True)
     affine_model.fit(data_train, labels_train)
     dataset.add_pickle_asset(affine_model, key=affine_model_key, parent_asset=data_key)
     dataset.save()
