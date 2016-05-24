@@ -36,8 +36,9 @@ t0 = time()
 t = time()
 
 dataset = Dataset(mnist_path)
+
 labels = dataset.get_asset_data(labels_key)
-data_key = "scatnet_" + "_".join(["%s%i" % (i) for i in parameters.items()])
+data_key = "scatnet_" + "_".join(["%s%i" % (i) for i in parameters.items()]) + "_" + source_key
 affine_model_key = 'affine_model_' + data_key
 print "data_key:         %s" % data_key
 print "affine_model_key: %s" % affine_model_key
