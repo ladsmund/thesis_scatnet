@@ -1,7 +1,8 @@
 import numpy as np
 import json
 import os
-import shutil
+import sys
+import pickle
 
 
 def numpy_memmap(path, shape, dtype):
@@ -46,13 +47,33 @@ class Dataset:
                 del d[k]
         return d
 
-    def get_asset_data(self, key, array_init_fun=numpy_memmap):
+    def get_asset_data(self, key):
         if key not in self.assets:
             raise KeyError("No asset with key: %s" % str(key))
+        if 'type' in self.assets[key]:
+            type = self.assets[key]['type']
+        else:
+            type = 'array'
+
+        switch = {'array':self._load_array_asset,
+                  'pickle':self._load_pickle_asset}
+
+        if type not in switch:
+            raise BaseException('Unknown type: %s', type)
+
+        return switch[type](key)
+
+    def _load_array_asset(self, key):
         path = self.asset_file_path(key)
+        print path
         shape = tuple(self.assets[key]['shape'])
         dtype = self.assets[key]['dtype']
-        return array_init_fun(path, shape, dtype)
+        return numpy_memmap(path, shape, dtype)
+
+    def _load_pickle_asset(self, key):
+        path = self.asset_file_path(key)
+        with open(path, 'r') as f:
+            return pickle.load(f)
 
     def new_asset(self, key, shape, dtype, generator, parameters=None, version=None, parent_asset=None):
         asset = dict()
@@ -67,9 +88,26 @@ class Dataset:
         filename = self.asset_file_path(key)
         return np.memmap(filename, mode='w+', shape=shape, dtype=dtype)
 
-    def add_asset(self, array, key, generator, version=None, parameters=None, parent_asset=None):
+    def add_pickle_asset(self, object, key, generator=None, version=None, parameters=None, parent_asset=None):
+        filename = self.asset_file_path(key)
+        print "Filename: %s" % filename
+
+        with open(filename, 'w') as f:
+            pickle.dump(object, f)
+
+            asset = dict()
+            asset['type'] = 'pickle'
+            asset['generator'] = generator
+            asset['version'] = version
+            asset['parameters'] = parameters
+            asset['parent_asset'] = parent_asset
+
+            self.assets[key] = asset
+
+    def add_asset(self, array, key, generator=None, version=None, parameters=None, parent_asset=None):
         # Write array to data file
-        filename = os.path.join(self.path, key + self.ASSET_EXT)
+        filename = self.asset_file_path(key)
+        print "Filename: %s" % filename
 
         if isinstance(array, np.memmap) and array.filename == filename:
             # print "The memory map file was already written to the asset file"
@@ -80,6 +118,7 @@ class Dataset:
             data_file.close()
 
         asset = dict()
+        asset['type'] = 'array'
         asset['generator'] = generator
         asset['version'] = version
         asset['parameters'] = parameters

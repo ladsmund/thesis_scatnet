@@ -1,11 +1,11 @@
 import argparse
 import os
-import sys
 import signal
+import sys
 
 from scattconvnet import process_data
-from scattconvnet.utilities.dataset import parse_asset_path, Dataset
 from scattconvnet.scatnet import DEFAULT_SCALE, DEFAULT_NANGLES, DEFAULT_MAX_DEPTH
+from utilities.dataset import parse_asset_path, Dataset
 
 if __name__ == '__main__':
 

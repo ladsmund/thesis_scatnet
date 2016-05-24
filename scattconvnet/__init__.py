@@ -1,18 +1,15 @@
-from time import time
-import itertools
-
 import sys
+from time import time
 
 from multi_process import MultiScatNet
 from scatnet import ScatNet, DEFAULT_SCALE, DEFAULT_NANGLES, DEFAULT_MAX_DEPTH
-from utilities.dataset import Dataset, parse_asset_path
 
 DEFAULT_CALLBACK_INTERVAL = .5
 
 
-def process_data(input = None,
-                 dataset = None,
-                 input_asset_key = None,
+def process_data(input=None,
+                 dataset=None,
+                 input_asset_key=None,
                  scale=DEFAULT_SCALE,
                  nangles=DEFAULT_NANGLES,
                  max_depth=DEFAULT_MAX_DEPTH,
@@ -36,13 +33,15 @@ def process_data(input = None,
     key = "%s_%s" % (scatnet.get_key(), input_asset_key)
     shape = scatnet.get_shape(input_shape, nimages)
     output = dataset.new_asset(key=key, dtype=scatnet.coefficient_dtype, shape=shape, generator='scatnet',
-                                     parent_asset=input_asset_key)
+                               parent_asset=input_asset_key,
+                               parameters={'nangles': nangles, 'scale': scale, 'max_depth': max_depth})
 
     #######################################################
     # Start processing
     #######################################################
     global last_write_time
     last_write_time = time()
+
     def print_status(proc_count, proc_size):
         global last_write_time
         if (time() - last_write_time) < callback_interval:
@@ -57,7 +56,6 @@ def process_data(input = None,
         sys.stdout.write(s)
 
     scatnet.process_images(input, output, status_callback=print_status)
-
 
     t1 = time()
     output.flush()
