@@ -109,9 +109,9 @@ def find_best_dimension(data, labels):
 
     best_dim = max(scores.items(), key=lambda i: i[1])[0]
 
-    print best_dim
-    import matplotlib.pyplot as plt
-    dim, score = zip(*scores.items())
-    plt.plot(dim, score,'.')
-    plt.show()
+    # print best_dim
+    # import matplotlib.pyplot as plt
+    # dim, score = zip(*scores.items())
+    # plt.plot(dim, score,'.')
+    # plt.show()
     return best_dim
