@@ -66,41 +66,52 @@ class AffineModel():
 
 
 def find_best_dimension(data, labels):
-    skf = cross_validation.StratifiedKFold(np.ravel(labels), 4)
-    max_dim = None
-    classifiers = []
+    folds = 4
+
+    skf = cross_validation.StratifiedKFold(np.ravel(labels), folds)
+
+    classifier_number = 0
+    all_scores = {}
     for train, test in skf:
+
+        classifier_number += 1
+        print "classifier %i/%i" % (classifier_number, folds)
         classifier = AffineModel()
         classifier.fit(data[train], labels[train])
-        classifiers.append(classifier)
-        if max_dim is not None:
-            max_dim = min(max_dim, classifier.n_components)
-        else:
-            max_dim = classifier.n_components
+        max_dim = classifier.n_components
 
-    step = max(max_dim // 10, 1)
-    search_dim = range(1, max_dim, step)
+        step = max(max_dim // 10, 1)
+        search_dim = range(1, max_dim, step)
+
+        classifier_scores = {}
+        while len(search_dim) > 0:
+            for d in search_dim:
+                if d in classifier_scores:
+                    continue
+                classifier_scores[d] = classifier.score(data[test], labels[test], dim=d)
+                print "  dim %5i: %.2f" % (d, classifier_scores[d])
+            best_dim = max(classifier_scores.items(), key=lambda i: i[1])[0]
+            if step == 1:
+                break
+            new_step = max(int(step // 1.5), 1)
+            search_dim = range(max(best_dim - step, 0), best_dim + step, new_step)
+            step = new_step
+
+        for d, score in classifier_scores.items():
+            if d in all_scores:
+                all_scores[d].append(score)
+            else:
+                all_scores[d] = [score]
 
     scores = {}
-    while len(search_dim) > 0:
-        for d in search_dim:
-            if d in scores:
-                continue
-            score = np.mean([c.score(data[test], labels[test], dim=d) for c in classifiers])
-            scores[d] = score
+    for d, score_list in all_scores.items():
+        scores[d] = np.median(score_list)
 
-        best_dim = max(scores.items(), key=lambda i: i[1])[0]
+    best_dim = max(scores.items(), key=lambda i: i[1])[0]
 
-        if step == 1:
-            break
-
-        new_step = max(int(step // 1.5), 1)
-        search_dim = range(max(best_dim - step, 0), best_dim + step, new_step)
-        step = new_step
-
-    # print best_dim
-    # import matplotlib.pyplot as plt
-    # dim, score = zip(*scores.items())
-    # plt.plot(dim, score,'.')
-    # plt.show()
+    print best_dim
+    import matplotlib.pyplot as plt
+    dim, score = zip(*scores.items())
+    plt.plot(dim, score,'.')
+    plt.show()
     return best_dim
