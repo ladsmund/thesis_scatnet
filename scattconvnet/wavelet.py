@@ -23,6 +23,29 @@ def gauss_kernel(sigma, size=None):
     return kernel / np.sum(kernel)
 
 
+def morlet1d(sigma, size=None, angle_freq=DEFAULT_XI):
+    if size is None:
+        size = int(DEFAULT_SIZE * sigma)
+    n = size//2
+    xs = np.arange(-n, n)
+
+    carrier = wave1d(xs, sigma, angle_freq)
+    envelope = gauss(xs, sigma)
+
+    # Normalize envolope such that it sums to 1.
+    envelope /= np.sum(envelope)
+
+    # Adjust to the zero mean wavelet constrain
+    wavelet = carrier * envelope
+    sum0 = np.sum(wavelet)
+    sum_envelope = np.sum(envelope)
+    beta = sum0 / sum_envelope
+    wavelet = np.multiply(carrier - beta, envelope)
+
+    return wavelet
+
+
+
 def morlet(sigma, angle, size=None, angle_freq=DEFAULT_XI):
     if size is None:
         size = int(DEFAULT_SIZE * sigma)
