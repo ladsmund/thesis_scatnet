@@ -68,6 +68,20 @@ labels_test = labels[train_test_split:]
 
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
+print("******************************************")
+print("Determine dimensionality for affine models")
+t = time()
+if redo_find_dim or not 'best_dim' in dataset.assets[affine_model_key]:
+    best_dim = find_best_dimension(np.mat(data_train), labels_train)
+    dataset.assets[affine_model_key]['best_dim'] = best_dim
+    dataset.save()
+else:
+    best_dim = dataset.assets[affine_model_key]['best_dim']
+print "best_dim: %i" % best_dim
+
+
+dt = time() - t
+print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
 print("************************************")
 print("Generate affine model for all labels")
 t = time()
@@ -80,20 +94,6 @@ if redo_affine_model or not affine_model_key in dataset.assets:
 
 else:
     affine_model = dataset.get_asset_data(affine_model_key)
-
-dt = time() - t
-print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
-print("******************************************")
-print("Determine dimensionality for affine models")
-t = time()
-if redo_find_dim or not 'best_dim' in dataset.assets[affine_model_key]:
-    best_dim = find_best_dimension(np.mat(data_train), labels_train)
-    dataset.assets[affine_model_key]['best_dim'] = best_dim
-    dataset.save()
-else:
-    best_dim = dataset.assets[affine_model_key]['best_dim']
-print "best_dim: %i" % best_dim
-
 
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
