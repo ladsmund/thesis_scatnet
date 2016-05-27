@@ -71,7 +71,7 @@ print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
 print("******************************************")
 print("Determine dimensionality for affine models")
 t = time()
-if redo_find_dim or not 'best_dim' in dataset.assets[affine_model_key]:
+if redo_find_dim or affine_model_key not in dataset.assets or not 'best_dim' in dataset.assets[affine_model_key]:
     best_dim = find_best_dimension(np.mat(data_train), labels_train)
     dataset.assets[affine_model_key]['best_dim'] = best_dim
     dataset.save()
@@ -95,13 +95,19 @@ if redo_affine_model or not affine_model_key in dataset.assets:
 else:
     affine_model = dataset.get_asset_data(affine_model_key)
 
+
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
 print("*******************")
 print("Test classification")
 t = time()
 score = affine_model.score(np.mat(data_test), labels_test, dim=best_dim)
-print "Accuricy: %.1f%%" % (100 * score)
+print "Accuricy: %.3f%%" % (100 * score)
 
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
+
+
+
+
+
