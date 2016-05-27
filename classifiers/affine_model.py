@@ -89,7 +89,7 @@ def find_best_dimension(data, labels):
                 if d in classifier_scores:
                     continue
                 classifier_scores[d] = classifier.score(data[test], labels[test], dim=d)
-                print "  dim %5i: %.2f" % (d, classifier_scores[d])
+                print "  dim %5i: %6.3f%%" % (d, 100*classifier_scores[d])
             best_dim = max(classifier_scores.items(), key=lambda i: i[1])[0]
             if step == 1:
                 break
