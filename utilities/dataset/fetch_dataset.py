@@ -6,8 +6,8 @@ def fetch_mldata(dist_path, data_name):
     skit_dataset = datasets.fetch_mldata(data_name)
 
     d = Dataset(dist_path)
-    d.add_asset(skit_dataset.data, key='original', generator='source')
-    d.add_asset(skit_dataset.target, key='labels', generator='source')
+    d.add_data_asset(skit_dataset.data, key='original', generator='source')
+    d.add_data_asset(skit_dataset.target, key='labels', generator='source')
     d.save()
     return d
 

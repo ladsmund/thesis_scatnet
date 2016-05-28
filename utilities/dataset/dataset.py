@@ -104,7 +104,7 @@ class Dataset:
 
             self.assets[key] = asset
 
-    def add_asset(self, array, key, generator=None, version=None, parameters=None, parent_asset=None):
+    def add_data_asset(self, array, key, generator=None, version=None, parameters=None, parent_asset=None):
         # Write array to data file
         filename = self.asset_file_path(key)
         print "Filename: %s" % filename
