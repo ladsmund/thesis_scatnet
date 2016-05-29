@@ -3,6 +3,8 @@ import numpy as np
 from utilities.dataset import Dataset
 import scattconvnet
 from classifiers.affine_model import AffineModel, reshape_to_1d, find_best_dimension
+from classifiers.affine_model_old import AffineModelOld
+from classifiers.affine_model_multi import AffineModelPar
 
 from time import time
 
@@ -54,6 +56,7 @@ else:
     data = dataset.get_asset_data(data_key)
 data = reshape_to_1d(data)
 
+
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
 print("*******************************")
@@ -64,43 +67,43 @@ data_test = np.mat(data[train_test_split:])
 labels_train = labels[:train_test_split]
 labels_test = labels[train_test_split:]
 
-dt = time() - t
-print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
-print("******************************************")
-print("Determine dimensionality for affine models")
+
+print "Affine Model Old"
+a = AffineModelOld()
 t = time()
-if True or redo_find_dim or affine_model_key not in dataset.assets or not 'best_dim' in dataset.assets[
-    affine_model_key]:
-    best_dim = find_best_dimension(np.mat(data_train), labels_train)
-    dataset.assets[affine_model_key]['best_dim'] = best_dim
-    dataset.save()
-else:
-    best_dim = dataset.assets[affine_model_key]['best_dim']
-print "best_dim: %i" % best_dim
-
+a.fit(data_train, labels_train)
+t2 = time()
+s1 = a.score(data_test, labels_test, dim=10)
+dt2 = time() - t2
 dt = time() - t
-print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
-print("************************************")
-print("Generate affine model for all labels")
+print "score: %.4f" % s1
+print "Took %5.3fs %5.3fs\n" % (dt, dt2)
+
+print "Affine Model New"
+a = AffineModel()
 t = time()
-affine_model = None
-if True or redo_affine_model or not affine_model_key in dataset.assets:
-    affine_model = AffineModel(n_components=None, verbose=True, root_path=mnist_path, key=affine_model_key)
-    affine_model.fit(data_train, labels_train)
-    dataset.add_pickle_asset(affine_model, key=affine_model_key, parent_asset=data_key)
-    dataset.save()
+a.fit(data_train, labels_train)
+t2 = time()
+s2 = a.score(data_test, labels_test, dim=None)
+dt2 = time() - t2
+dt = t2 - t
+print "score: %.4f" % s2
+print "Took %5.3fs %5.3fs\n" % (dt, dt2)
 
-else:
-    affine_model = dataset.get_asset_data(affine_model_key)
-
-dt = time() - t
-print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
-print("*******************")
-print("Test classification")
+print "Affine Model Par"
+a = AffineModelPar()
 t = time()
-for _ in range(10):
-    score = affine_model.score(np.mat(data_test), labels_test, dim=best_dim)
-print "Accuricy: %.3f%%" % (100 * score)
+a.fit(data_train, labels_train)
+t2 = time()
+s3 = a.score(data_test, labels_test, dim=10)
+dt2 = time() - t2
+dt = t2 - t
+print "score: %.4f" % s3
+print "Took %5.3fs %5.3fs\n" % (dt, dt2)
 
-dt = time() - t
-print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt / 10)
+
+
+
+
+exit()
+

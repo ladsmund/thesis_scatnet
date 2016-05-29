@@ -55,8 +55,8 @@ class Dataset:
         else:
             type = 'array'
 
-        switch = {'array':self._load_array_asset,
-                  'pickle':self._load_pickle_asset}
+        switch = {'array': self._load_array_asset,
+                  'pickle': self._load_pickle_asset}
 
         if type not in switch:
             raise BaseException('Unknown type: %s', type)
