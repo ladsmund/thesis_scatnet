@@ -6,7 +6,8 @@ import pickle
 
 
 def numpy_memmap(path, shape, dtype):
-    return np.memmap(path, mode='r', shape=shape, dtype=dtype)
+    f = open(path, 'r+')
+    return np.memmap(f, shape=shape, dtype=dtype)
 
 
 class Dataset:
