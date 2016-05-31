@@ -134,6 +134,7 @@ t = time()
 for _ in range(10):
     score = affine_model.score(data_test, labels_test, dim=best_dim)
     dataset.assets[affine_model_key]['score'] = "%.3f%%" % (100*score)
+    dataset.save()
 print "Accuricy: %.3f%%" % (100 * score)
 
 dt = time() - t
