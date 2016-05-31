@@ -1,4 +1,5 @@
 import argparse
+import os
 import numpy as np
 from utilities.dataset import Dataset
 import scattconvnet
@@ -39,7 +40,9 @@ dataset = Dataset(mnist_path)
 
 labels = dataset.get_asset_data(labels_key)
 data_key = "scatnet_" + "_".join(["%s%i" % (i) for i in parameters.items()]) + "_" + source_key
+data_normalized_key = "normalized"
 affine_model_key = 'affine_model_' + data_key
+best_dim_key = 'best_dim_' + data_key
 print "data_key:         %s" % data_key
 print "affine_model_key: %s" % affine_model_key
 
@@ -52,30 +55,60 @@ if redo_scatnet or not data_key in dataset.assets:
     dataset.save()
 else:
     data = dataset.get_asset_data(data_key)
-data = reshape_to_1d(data)
+
+# data = reshape_to_1d(data)
 
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
 print("*******************************")
 print("Select test and train data sets")
 t = time()
-data_train = np.mat(data[:train_test_split])
-data_test = np.mat(data[train_test_split:])
+
+print train_test_split
+print data.shape
+
+data_train = data[:train_test_split]
+data_test = data[train_test_split:]
+
 labels_train = labels[:train_test_split]
 labels_test = labels[train_test_split:]
 
 dt = time() - t
 print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
+print("*******************")
+print("Batch normalization")
+t = time()
+
+
+data_normalized_path = os.path.join(mnist_path, data_normalized_key + ".data")
+if not data_normalized_key in dataset.assets[data_key]:
+
+    data_norm = np.linalg.norm(data_train, axis=(2, 3))
+    max_norm = np.max(data_norm, axis=0)
+
+    for i, m in enumerate(max_norm):
+        if m == 0 or m == 1:
+            continue
+        data[:, i, :, :] /= m
+
+    dataset.assets[data_key][data_normalized_key] = 'batch_max'
+    dataset.save()
+
+dt = time() - t
+print "Took %.3fs. (%.3fs)\n" % (time() - t0, dt)
+
+data_train = np.mat(reshape_to_1d(data_train))
+data_test = np.mat(reshape_to_1d(data_test))
+
 print("******************************************")
 print("Determine dimensionality for affine models")
 t = time()
-if True or redo_find_dim or affine_model_key not in dataset.assets or not 'best_dim' in dataset.assets[
-    affine_model_key]:
-    best_dim = find_best_dimension(np.mat(data_train), labels_train)
-    dataset.assets[affine_model_key]['best_dim'] = best_dim
-    dataset.save()
+best_dim = 0
+if redo_find_dim or best_dim_key not in dataset.assets:
+    best_dim = find_best_dimension(data_train, labels_train)
+    dataset.assets[best_dim_key] = best_dim
 else:
-    best_dim = dataset.assets[affine_model_key]['best_dim']
+    best_dim = int(dataset.assets[best_dim_key])
 print "best_dim: %i" % best_dim
 
 dt = time() - t
@@ -86,7 +119,7 @@ t = time()
 affine_model = None
 if True or redo_affine_model or not affine_model_key in dataset.assets:
     affine_model = AffineModel(n_components=None, verbose=True, root_path=mnist_path, key=affine_model_key)
-    affine_model.fit(data_train, labels_train)
+    affine_model.fit((data_train), labels_train)
     dataset.add_pickle_asset(affine_model, key=affine_model_key, parent_asset=data_key)
     dataset.save()
 
@@ -99,7 +132,8 @@ print("*******************")
 print("Test classification")
 t = time()
 for _ in range(10):
-    score = affine_model.score(np.mat(data_test), labels_test, dim=best_dim)
+    score = affine_model.score(data_test, labels_test, dim=best_dim)
+    dataset.assets[affine_model_key]['score'] = "%.3f%%" % (100*score)
 print "Accuricy: %.3f%%" % (100 * score)
 
 dt = time() - t

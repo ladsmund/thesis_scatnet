@@ -11,7 +11,7 @@ import pickle
 
 def reshape_to_1d(data):
     dim = np.product(data.shape[1:])
-    return np.reshape(data, (data.shape[0], dim))
+    return data.reshape((data.shape[0], dim))
 
 def mahalanobis_dist(model, data):
     transformed = model.transform(data).ravel()
