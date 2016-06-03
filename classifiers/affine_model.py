@@ -1,5 +1,5 @@
 import os
-
+import sys
 import numpy as np
 from sklearn.decomposition import PCA
 
@@ -22,9 +22,8 @@ def mahalanobis_dist(model, data):
 def model_dist(model, data, dim=None):
     if dim is None:
         dim = data.shape[1]
-
     data_t = data - model[0]
-    data_p = (data_t * model[1][:, :dim]) * model[1][:, :dim].T
+    data_p = (np.mat(data_t) * model[1][:, :dim]) * model[1][:, :dim].T
     return np.sum(np.power(data_t - data_p, 2), axis=1)
 
 def distance(model_path, *argv, **kwargs):
@@ -39,6 +38,7 @@ class AffineModel():
         self.n_components = kwargs.pop('n_components', None)
         self.model_keys = []
         self.models = []
+        self.dim = None
 
     def get_params(self, deep=True):
         return {'n_components': self.n_components}
@@ -60,13 +60,19 @@ class AffineModel():
         if not model_key in self.model_keys:
             self.model_keys.append(model_key)
 
-    def fit(self, data, labels):
+    def fit(self, data, labels, **kwargs):
+        find_dim = kwargs.pop('find_dim', False)
+        if find_dim:
+            self.dim = find_best_dimension(data, labels)
+
         self.models = []
         for l in set(labels):
             self.train_classifier(l, data[labels == l])
         return self
 
     def classify(self, data, dim=None):
+        if dim is None:
+            dim = self.dim
         distances = np.zeros(shape=(data.shape[0], len(self.model_keys)), dtype='float32')
         for i, model_key in enumerate(self.model_keys):
             model_path = self.get_model_path(model_key)
@@ -88,8 +94,7 @@ class AffineModel():
             os.remove(path)
 
 
-def find_best_dimension(data, labels, ):
-    folds = 4
+def find_best_dimension(data, labels, folds = 5):
 
     skf = cross_validation.StratifiedKFold(np.ravel(labels), folds)
 
@@ -98,7 +103,7 @@ def find_best_dimension(data, labels, ):
     for train, test in skf:
 
         classifier_number += 1
-        print "classifier %i/%i" % (classifier_number, folds)
+        # sys.stdout.write("classifier %i/%i:" % (classifier_number, folds))
         # classifier = AffineModel()
         classifier = AffineModel()
 
@@ -114,13 +119,15 @@ def find_best_dimension(data, labels, ):
                 if d in classifier_scores:
                     continue
                 classifier_scores[d] = classifier.score(data[test], labels[test], dim=d)
-                print "  dim %5i: %6.3f%%" % (d, 100 * classifier_scores[d])
+                # print "  dim %5i: %6.3f%%" % (d, 100 * classifier_scores[d])
+                # sys.stdout.write('.')
             best_dim = max(classifier_scores.items(), key=lambda i: i[1])[0]
             if step == 1:
                 break
             new_step = max(int(step // 1.5), 1)
             search_dim = range(max(best_dim - step, 0), best_dim + step, new_step)
             step = new_step
+        # sys.stdout.write("\n")
 
         for d, score in classifier_scores.items():
             if d in all_scores:
@@ -136,7 +143,7 @@ def find_best_dimension(data, labels, ):
 
     best_dim = max(scores.items(), key=lambda i: i[1])[0]
 
-    # print best_dim
+    print "Best dimension: %i" % best_dim
     # import matplotlib.pyplot as plt
     # dim, score = zip(*scores.items())
     # plt.plot(dim, score,'.')
