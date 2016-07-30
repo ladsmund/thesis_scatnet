@@ -3,21 +3,26 @@ import cv2
 from wavelet import morlet, gauss_kernel
 from time import time
 import itertools
+import scipy
 
 DEFAULT_SCALE = 4
 DEFAULT_MAX_DEPTH = 2
 DEFAULT_NANGLES = 4
 DEFAULT_DTYPE = 'float32'
 
+def conv_cv2(img, kernel):
+        if kernel.dtype == 'complex':
+            r = cv2.filter2D(img, -1, np.real(kernel))
+            i = cv2.filter2D(img, -1, np.imag(kernel))
+            return r + i * 1j
+        else:
+            return cv2.filter2D(img, -1, kernel)
 
-def conv(img, kernel):
-    if kernel.dtype == 'complex':
-        r = cv2.filter2D(img, -1, np.real(kernel))
-        i = cv2.filter2D(img, -1, np.imag(kernel))
-        return r + i * 1j
-    else:
-        return cv2.filter2D(img, -1, kernel)
 
+def conv_fft(img, kernel):
+    return scipy.signal.fftconvolve(img,kernel)
+
+CONV_DEFAULT = conv_cv2
 
 def generate_kernels(angles, scales):
     kernel_layers = list()
@@ -64,8 +69,10 @@ class ScatNet:
                  scale,
                  max_order=DEFAULT_MAX_DEPTH,
                  return_response=False,
-                 dtype=DEFAULT_DTYPE):
+                 dtype=DEFAULT_DTYPE,
+                 conv=CONV_DEFAULT):
 
+        self.conv = conv
         self.nangles = nangles
         self.angles = np.linspace(3 * np.pi / 2, np.pi / 2, nangles, endpoint=False)
         self.scale = scale
@@ -115,7 +122,7 @@ class ScatNet:
             # Select filter kernel
             kernel = self.kernel_layers[angle_indx][scale_indx]
 
-            res[index] = np.abs(conv(src, kernel))
+            res[index] = np.abs(self.conv(src, kernel))
 
         if self.return_response:
             return res
@@ -123,7 +130,7 @@ class ScatNet:
             return self.coefficients(res)
 
     def coefficients(self, responses):
-        blur = map(lambda i: conv(i, self.blur_kernel), responses)
+        blur = map(lambda i: self.conv(i, self.blur_kernel), responses)
         scatt_coeff = map(lambda i: i[::self.downsample_step, ::self.downsample_step], blur)
         return np.array(scatt_coeff)
 
